@@ -1,0 +1,52 @@
+[project]
+name = "gpu-manager-backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi[standard]>=0.121.2",
+    "ruff>=0.14.5",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.5",
+]
+
+[tool.ruff]
+exclude = [".venv", "alembic"]
+include = ["*.py"]
+line-length = 120
+indent-width = 4
+target-version = "py314"
+src = ["app"]
+
+
+[tool.ruff.lint]
+
+select = [
+    "E",   # Ошибки стиля (PEP 8)
+    "W",   # Предупреждения стиля (PEP 8)
+    "F",   # Ошибки flake8
+    "I",   # Импорты (isort)
+    "B",   # Bugbear
+    "C4",  # Comprehensions
+    "SIM", # Simplicity
+    "UP",  # Pyupgrade
+    "ASYNC", # Асинхронные правила
+    "RUF", # Ruff-специфичные
+]
+
+ignore = [
+    "B008", # Использование mutable defaults (часто используется в FastAPI)
+]
+
+# Настройка форматирования импортов
+[tool.ruff.lint.isort]
+known-first-party = ["myproject"] # Заменить на имя вашего проекта
+
+# Игнорировать файлы и директории
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"] # Разрешить неиспользуемые импорты в __init__.py
+"tests/*" = ["S101"] # Разрешить assert в тестах

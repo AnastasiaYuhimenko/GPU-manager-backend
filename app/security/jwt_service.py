@@ -1,7 +1,9 @@
+import logging
 from datetime import UTC, datetime, timedelta
 
 import jwt
 from app.core.config import settings
+from app.db.base import SessionDep
 from app.db.unit_of_work import UnitOfWork
 from app.schemas.users import TokenData, UserSchemeWithId
 from fastapi import HTTPException, Request, Response, status
@@ -51,10 +53,11 @@ async def verify_token(token: str, refresh_token: str, response: Response, sessi
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         userid = payload.get("sub")
+        logging.debug(userid)
         if userid is None:
             raise credentials_exception
         token_data = TokenData(user_id=userid, email="", token_type=payload.get("token_type"))
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError, jwt.ExpiredSignatureError:
         try:
             payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
             userid = payload.get("sub")
@@ -68,11 +71,15 @@ async def verify_token(token: str, refresh_token: str, response: Response, sessi
                 key="access_token",
                 value=new_access_token,
                 httponly=True,
-                secure=True,
+                # secure=True,
                 max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             )
             response.set_cookie(
-                key="refresh_token", value=new_refresh_token, httponly=True, secure=True, max_age=15 * 24 * 60 * 60
+                key="refresh_token",
+                value=new_refresh_token,
+                httponly=True,
+                # secure=True,
+                max_age=15 * 24 * 60 * 60,
             )
             return TokenData(
                 user_id=userid,
@@ -99,9 +106,7 @@ async def verify_token(token: str, refresh_token: str, response: Response, sessi
     return TokenData(user_id=userid, email=user.email, token_type=payload.get("token_type"))
 
 
-async def get_current_user(
-    request: Request,
-):
+async def get_current_user(request: Request, response: Response, session: SessionDep):
     token = request.cookies.get("access_token")
     refresh_token = request.cookies.get("refresh_token")
     if not token:
@@ -112,5 +117,5 @@ async def get_current_user(
     if not token and not refresh_token:
         raise credentials_exception
 
-    user = await verify_token(token=token, refresh_token=refresh_token)  # type: ignore
+    user = await verify_token(token=token, refresh_token=refresh_token, session=session, response=response)
     return user

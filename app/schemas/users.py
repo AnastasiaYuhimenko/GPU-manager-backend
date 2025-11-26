@@ -1,5 +1,6 @@
 import re
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import HTTPException, status
 from pydantic import AfterValidator, BaseModel, EmailStr
@@ -71,7 +72,7 @@ class Token(BaseModel):
 
 
 class TokenData(BaseModel):
-    user_id: str | None = None
+    user_id: UUID | None = None
     email: EmailStr
     token_type: str | None
 

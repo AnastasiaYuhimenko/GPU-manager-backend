@@ -16,6 +16,7 @@ class UnitOfWork:
         else:
             await self.commit()
         assert self.session is not None
+        self.flush()
         # await self.session.close() иначе сессия закроется
 
     async def commit(self) -> None:
@@ -25,3 +26,7 @@ class UnitOfWork:
     async def rollback(self) -> None:
         if self.session:
             await self.session.rollback()
+
+    async def flush(self) -> None:
+        if self.session:
+            await self.session.flush()

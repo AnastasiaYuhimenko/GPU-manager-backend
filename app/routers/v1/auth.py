@@ -2,16 +2,21 @@
 # from app.auth.utils import (
 #     get_password_hash,
 # )
-from app.schemas.users import TokenData, UserCreate, UserLogin, UserOut
+
+from typing import Annotated
+
+from app.models.users import User
+from app.schemas.users import TokenData, UserCreate, UserLogin
+from app.security.jwt_service import get_current_user
 from app.services.user_service import UserServiceDep
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=UserOut, status_code=201)
-async def register(user: UserCreate, user_service: UserServiceDep):
-    return await user_service.create_user(user)
+@router.post("/register", response_model=TokenData, status_code=201)
+async def register(user: UserCreate, user_service: UserServiceDep, request: Request, response: Response):
+    return await user_service.create_user(user, request=request, response=response)
 
 
 @router.post("/login", response_model=TokenData, status_code=200)
@@ -19,7 +24,16 @@ async def login(user: UserLogin, user_service: UserServiceDep, responce: Respons
     return await user_service.login_user(email=user.email, password=user.password, response=responce, request=request)
 
 
-# @router.post("/logout")
+@router.get("/me")
+async def get_me(user: Annotated[User, Depends(get_current_user)], response=Response):
+    return user
+
+
+@router.post("/logout", status_code=401)
+async def logout(response: Response):
+    response.delete_cookie(key="access_token", path="/")
+    response.delete_cookie(key="refresh_token", path="/")
+    return {"message": "Вы вышли уз системы!"}
 
 
 # @router.post("/login", response_model=Token, status_code=status.HTTP_200_OK)

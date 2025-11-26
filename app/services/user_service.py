@@ -1,4 +1,3 @@
-import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -7,7 +6,7 @@ from app.db.base import get_session
 from app.db.redis_con import redis_dep
 from app.db.unit_of_work import UnitOfWork
 from app.models.users import User
-from app.schemas.users import TokenData, UserCreate
+from app.schemas.users import TokenData, UserAllData, UserCreate
 from app.security.jwt_service import create_access_token, create_refresh_token, get_password_hash, verify_password
 from fastapi import Depends, HTTPException, Request, Response, status
 from redis.client import Redis
@@ -27,7 +26,7 @@ class UserService:
         if fails >= 5:
             await self.redis.set(block_key, "1", ex=900)
 
-    async def create_user(self, user_data: UserCreate) -> User:
+    async def create_user(self, user_data: UserCreate, request: Request, response: Response) -> User:
         user_exists = await self.get_user(user_data.email)
         if user_exists:
             raise HTTPException(
@@ -42,7 +41,9 @@ class UserService:
         )
         async with UnitOfWork(self.session) as uow:
             await uow.users.add(user)
-            return user
+        return await self.login_user(
+            email=user_data.email, password=user_data.password, request=request, response=response
+        )
 
     async def get_user(self, email: str):
         async with UnitOfWork(self.session) as uow:
@@ -69,6 +70,7 @@ class UserService:
             row = await uow.users.get_user(email=email)
             if row is None:
                 await self._login_fail(ip=ip)
+                logger.info(f"Неудачная попытка входа: EMAIL: {email}, IP: {ip}")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST, detail={"email": "Неверный email или пароль"}
                 )
@@ -80,13 +82,25 @@ class UserService:
                 status_code=status.HTTP_400_BAD_REQUEST, detail={"password": "Неверный email или пароль"}
             )
 
-        access_token = create_access_token(data=row)
-        refresh_token = create_refresh_token(data=row)
+        access_token = create_access_token(
+            data=UserAllData(
+                id=str(row.id), email=row.email, name=row.name, lastname=row.lastname, password=password
+            ).model_dump()
+        )
+        refresh_token = create_refresh_token(
+            data=UserAllData(
+                id=str(row.id), email=row.email, name=row.name, lastname=row.lastname, password=password
+            ).model_dump()
+        )
 
         response.set_cookie("access_token", path="/", value=access_token, httponly=True)
         response.set_cookie("refresh_token", path="/", value=refresh_token, httponly=True)
 
         return TokenData(user_id=row.id, email=row.email, token_type="bearer")
+
+    async def logout(response: Response):
+        response.delete_cookie("access_token")
+        response.delete_cookie("refresh_token")
 
 
 def get_user_service(session: AsyncSession = Depends(get_session), redis: Redis = Depends(redis_dep)) -> UserService:

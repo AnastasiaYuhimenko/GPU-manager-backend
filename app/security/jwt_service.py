@@ -1,4 +1,3 @@
-import logging
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -52,15 +51,15 @@ credentials_exception = HTTPException(
 async def verify_token(token: str, refresh_token: str, response: Response, session: AsyncSession) -> TokenData:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        userid = payload.get("sub")
-        logging.debug(userid)
+        userid = payload.get("id")
+        email = payload.get("email")
         if userid is None:
             raise credentials_exception
-        token_data = TokenData(user_id=userid, email="", token_type=payload.get("token_type"))
+        token_data = TokenData(user_id=userid, email=email, token_type=payload.get("token_type"))
     except jwt.InvalidTokenError, jwt.ExpiredSignatureError:
         try:
             payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-            userid = payload.get("sub")
+            userid = payload.get("email")
             if userid is None:
                 raise credentials_exception
             token_data = TokenData(user_id=userid, email="", token_type=payload.get("token_type"))
@@ -99,7 +98,6 @@ async def verify_token(token: str, refresh_token: str, response: Response, sessi
         id=str(user.id),
         email=str(user.email),
         name=str(user.name),
-        surname=str(user.surname),
         lastname=str(user.lastname),
     )
 

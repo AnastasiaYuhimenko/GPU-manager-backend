@@ -35,25 +35,25 @@ def validate_password(password: str) -> bool:
     return password
 
 
-class UserCreate(BaseModel):
+class CreateUserBody(BaseModel):
     email: EmailStr
     name: str
     lastname: str
     password: Annotated[str, AfterValidator(validate_password)]
 
 
-class UserLogin(BaseModel):
+class LoginUserBody(BaseModel):
     email: EmailStr
     password: str
 
 
-class UserOut(BaseModel):
+class UserReadresponse(BaseModel):
     email: EmailStr
     name: str
     lastname: str
 
 
-class UserAllData(BaseModel):
+class UserAllDataResponse(BaseModel):
     id: str
     email: EmailStr
     name: str
@@ -61,7 +61,7 @@ class UserAllData(BaseModel):
     password: str
 
 
-class UserSchemeWithId(UserOut):
+class UserSchemeWithIdResponse(UserReadresponse):
     id: str
 
 
@@ -71,11 +71,12 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
-class TokenData(BaseModel):
+class TokenDataResponse(BaseModel):
     user_id: UUID | None = None
     email: EmailStr
     token_type: str | None
 
 
-class MessageResponse(BaseModel):
-    message: str
+class UserEmailId(BaseModel):
+    id: str
+    email: EmailStr

@@ -1,18 +1,7 @@
-from functools import lru_cache
-
-from app.core.config import settings
 from redis.asyncio import Redis
 
-
-@lru_cache
-def get_redis() -> Redis:
-    return Redis(
-        host=settings.REDIS_HOST,
-        port=int(settings.REDIS_PORT),
-        db=0,
-        decode_responses=True,
-    )
+redis_client: Redis | None = None
 
 
-async def redis_dep() -> Redis:
-    return get_redis()
+def redis_dep() -> Redis:
+    return redis_client

@@ -1,4 +1,3 @@
-from collections.abc import Sequence
 from typing import TypeVar
 from uuid import UUID
 
@@ -17,14 +16,13 @@ class BaseRepo[T]:
         self.session.add(obj)
 
     async def remove(self, obj: T) -> None:
-      self.session.delete(obj)
-      await self.session.flush()
+        self.session.delete(obj)
 
     async def get_by_id(self, id: UUID) -> T | None:
         obj = await self.session.execute(select(self.model).where(self.model.id == id))  # type: ignore
         return obj.scalar_one_or_none()
 
-    async def list(self) -> Sequence[T]:  # TODO: что лучше? list? sequence?
+    async def list(self) -> list[T]:
         res = await self.session.execute(select(self.model))
 
         return res.scalars().all()

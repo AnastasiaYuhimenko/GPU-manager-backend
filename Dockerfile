@@ -1,10 +1,6 @@
-FROM python:3.13
+FROM python:3.14
 
 WORKDIR /app
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
 
 COPY . ./
 

@@ -20,7 +20,7 @@ credentials_exception = HTTPException(
 )
 
 
-class jwtService:
+class SecurityService:
     def __init__(self, response: Response, request: Request, session: AsyncSession) -> None:
         self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
         self.response = response
@@ -56,17 +56,14 @@ class jwtService:
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
             user_id = payload.get("id")
-            email = payload.get("email")
             if user_id is None:
                 raise credentials_exception
-            token_data = TokenDataResponse(user_id=user_id, email=email, token_type=payload.get("token_type"))
         except jwt.InvalidTokenError, jwt.ExpiredSignatureError:
             try:
                 payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-                user_id = payload.get("email")
+                user_id = payload.get("id")
                 if user_id is None:
                     raise credentials_exception
-                token_data = TokenDataResponse(user_id=user_id, email="", token_type=payload.get("token_type"))
 
                 new_access_token = self.create_access_token(data={"sub": user_id})
                 new_refresh_token = self.create_refresh_token(data={"sub": user_id})
@@ -126,7 +123,7 @@ def get_jwt_service(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    return jwtService(response=response, request=request, session=session)
+    return SecurityService(response=response, request=request, session=session)
 
 
-JwtServiceDep = Annotated[jwtService, Depends(get_jwt_service)]
+JwtServiceDep = Annotated[SecurityService, Depends(get_jwt_service)]

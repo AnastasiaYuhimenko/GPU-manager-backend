@@ -2,17 +2,17 @@ from typing import Annotated
 from uuid import UUID
 
 from app.core.logger import logger
-from app.db.redis_con import redis_dep
+from app.db.redis import RedisDep
 from app.db.unit_of_work import UnitOfWork
 from app.models.users import User
 from app.schemas.users import CreateUserBody, TokenDataResponse, UserEmailId
-from app.services import jwt_service
+from app.services.jwt_service import JwtServiceDep, SecurityService
 from fastapi import Depends, HTTPException, Response, status
 from redis.client import Redis
 
 
 class UserService:
-    def __init__(self, redis: Redis, jwt: jwt_service.jwtService):
+    def __init__(self, redis: Redis, jwt: SecurityService):
         self.redis = redis
         self.jwt = jwt
 
@@ -69,7 +69,7 @@ class UserService:
 
     async def login_user(self, email: str, password: str):
         ip = self.jwt.request.client.host
-        self._check_ip(ip=ip, email=email)
+        await self._check_ip(ip=ip, email=email)
         async with UnitOfWork(self.jwt.session) as uow:
             row = await uow.users.get_user_by_email(email=email)
             if row is None:
@@ -102,8 +102,8 @@ class UserService:
 
 
 def get_user_service(
-    redis: Redis = Depends(redis_dep),
-    jwt: jwt_service.jwtService = Depends(jwt_service.get_jwt_service),
+    redis: RedisDep,
+    jwt: JwtServiceDep,
 ) -> UserService:
     return UserService(redis=redis, jwt=jwt)
 

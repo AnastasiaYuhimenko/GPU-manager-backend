@@ -2,19 +2,33 @@ from typing import Annotated
 from uuid import UUID
 
 from app.core.logger import logger
+from app.db.base import SessionDep
 from app.db.redis import RedisDep
 from app.db.unit_of_work import UnitOfWork
 from app.models.users import User
 from app.schemas.users import CreateUserBody, TokenDataResponse, UserEmailId
-from app.services.jwt_service import JwtServiceDep, SecurityService
-from fastapi import Depends, HTTPException, Response, status
+from app.services.cookie_service import CookieService, CookieServiceDep
+from app.services.jwt_service import JwtService, JwtServiceDep
+from app.services.password_service import PasswordService, PasswordServiceDep
+from fastapi import Depends, HTTPException, status
 from redis.client import Redis
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class UserService:
-    def __init__(self, redis: Redis, jwt: SecurityService):
+    def __init__(
+        self,
+        redis: Redis,
+        jwt: JwtService,
+        passwordServ: PasswordService,
+        session: AsyncSession,
+        cookie_service: CookieService,
+    ):
         self.redis = redis
         self.jwt = jwt
+        self.passwordService = passwordServ
+        self.session = session
+        self.cookie_service = cookie_service
 
     async def _login_fail(self, ip: str):
         fail_count = f"login:fail:{ip}"
@@ -31,7 +45,7 @@ class UserService:
         await self.redis.delete(block_key)
 
     async def create_user(self, user_data: CreateUserBody) -> User:
-        async with UnitOfWork(self.jwt.session) as uow:
+        async with UnitOfWork(self.session) as uow:
             user_exists = await uow.users.is_user_exist(email=user_data.email)
             if user_exists:
                 raise HTTPException(
@@ -40,7 +54,7 @@ class UserService:
                 )
             user = User(
                 email=user_data.email,
-                password=self.jwt.get_password_hash(user_data.password),
+                password=self.passwordService.get_password_hash(user_data.password),
                 name=user_data.name,
                 lastname=user_data.lastname,
             )
@@ -48,12 +62,12 @@ class UserService:
         return user_data
 
     async def get_user_by_email(self, email: str):
-        async with UnitOfWork(self.jwt.session) as uow:
+        async with UnitOfWork(self.session) as uow:
             row = await uow.users.get_user_by_email(email)
             return row
 
     async def get_user_by_id(self, id: UUID):
-        async with UnitOfWork(self.jwt.session) as uow:
+        async with UnitOfWork(self.session) as uow:
             row = await uow.users.get_user_by_id(id)
             return row
 
@@ -68,9 +82,9 @@ class UserService:
             )
 
     async def login_user(self, email: str, password: str):
-        ip = self.jwt.request.client.host
+        ip = self.cookie_service.request.client.host
         await self._check_ip(ip=ip, email=email)
-        async with UnitOfWork(self.jwt.session) as uow:
+        async with UnitOfWork(self.session) as uow:
             row = await uow.users.get_user_by_email(email=email)
             if row is None:
                 await self._login_fail(ip=ip)
@@ -81,7 +95,7 @@ class UserService:
                 )
         password_correct = row.password
 
-        if not self.jwt.verify_password(plain_password=password, hashed_password=password_correct):
+        if not self.passwordService.verify_password(plain_password=password, hashed_password=password_correct):
             await self._login_fail(ip=ip)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -91,21 +105,24 @@ class UserService:
         access_token = self.jwt.create_access_token(data=data)
         refresh_token = self.jwt.create_refresh_token(data=data)
 
-        self.jwt.response.set_cookie("access_token", path="/", value=access_token, httponly=True)
-        self.jwt.response.set_cookie("refresh_token", path="/", value=refresh_token, httponly=True)
-        self._login_success(ip=ip)
+        await self.cookie_service.set_cookie(name="access_token", value=access_token)
+        await self.cookie_service.set_cookie(name="refresh_token", value=refresh_token)
+        await self._login_success(ip=ip)
         return TokenDataResponse(user_id=row.id, email=row.email, token_type="bearer")
 
-    async def logout(response: Response):
-        response.delete_cookie("access_token")
-        response.delete_cookie("refresh_token")
+    async def logout(self):
+        await self.cookie_service.delete_cookie(name="access_token")
+        await self.cookie_service.delete_cookie(name="refresh_token")
 
 
 def get_user_service(
     redis: RedisDep,
     jwt: JwtServiceDep,
+    passwordServ: PasswordServiceDep,
+    session: SessionDep,
+    cookie_service: CookieServiceDep,
 ) -> UserService:
-    return UserService(redis=redis, jwt=jwt)
+    return UserService(redis=redis, jwt=jwt, passwordServ=passwordServ, session=session, cookie_service=cookie_service)
 
 
 UserServiceDep = Annotated[UserService, Depends(get_user_service)]

@@ -111,6 +111,10 @@ class UserService:
         return TokenDataResponse(user_id=row.id, email=row.email, token_type="bearer")
 
     async def logout(self):
+        access_token = await self.cookie_service.get_cookie(name="access_token")
+        refresh_token = await self.cookie_service.get_cookie(name="refresh_token")
+        self.jwt.token_block(token=access_token)
+        self.jwt.token_block(token=refresh_token)
         await self.cookie_service.delete_cookie(name="access_token")
         await self.cookie_service.delete_cookie(name="refresh_token")
 
